@@ -1,0 +1,22 @@
+Core:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'simai_search/**'
+
+Tests:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'tests/**'
+
+Documentation:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'docs/**'
+    - '**/*.md'
+
+CI/CD:
+- changed-files:
+  - any-glob-to-any-file:
+    - '.github/**'
+    - 'dockerfiles/**'
+    - 'ci/**'
