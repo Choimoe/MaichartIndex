@@ -48,7 +48,7 @@ async function performSearch() {
     }
 
     try {
-        const response = await fetch(`/api/search?${params.toString()}`);
+        const response = await fetch(`api/search?${params.toString()}`);
         const data = await response.json();
 
         if (data.error) {
