@@ -3,6 +3,7 @@ import json
 import re
 from .db import SimaiDB
 from .parser import SimaiParser
+from bisect import bisect_left
 
 class RhythmSearcher:
     def __init__(self, db_path: str):
@@ -23,8 +24,23 @@ class RhythmSearcher:
         for chart_id, song_title, difficulty, level, note_data_json, designer in raw_rows:
             try:
                 # Pre-parse event data
-                events = json.loads(note_data_json)
+                events_list = json.loads(note_data_json)
                 
+                # OPTIMIZATION: Convert dicts to tuples to save memory
+                # Tuple structure: (time, bpm, is_star, resolution, src_start, src_end)
+                events_tuple = []
+                for e in events_list:
+                    # resolution might be missing in older dbs? valid default is 4
+                    # src_start/end might be missing?
+                    events_tuple.append((
+                        e.get('time', 0.0),
+                        e.get('bpm', 0.0),
+                        1 if e.get('is_star', False) else 0,
+                        e.get('resolution', 4.0),
+                        e.get('src_start', 0),
+                        e.get('src_end', 0)
+                    ))
+
                 # Pre-calculate numeric level for faster filtering
                 numeric_level = 0.0
                 try:
@@ -42,7 +58,7 @@ class RhythmSearcher:
                     'difficulty': difficulty,
                     'level_str': level,
                     'level_num': numeric_level,
-                    'events': events,
+                    'events': events_tuple, # Stored as tuples
                     # 'raw_content': raw_content, # EXCLUDED to save RAM
                     'designer': designer or ""
                 })
@@ -95,6 +111,7 @@ class RhythmSearcher:
                 
             # 2. Pattern Match
             try:
+                # chart['events'] is now List[Tuple]
                 match_result = self._match_pattern(chart['events'], query_events, tolerance, bpm_min, bpm_max)
                 if match_result:
                      match_indices, degree = match_result
@@ -107,6 +124,7 @@ class RhythmSearcher:
                      if raw_content is None:
                          continue
 
+                     # start_evt and end_evt are Tuples now
                      start_evt = chart['events'][match_indices[0]]
                      end_evt = chart['events'][match_indices[1]]
                      
@@ -114,12 +132,14 @@ class RhythmSearcher:
                      lines = [re.sub(r'//.*', '', line) for line in raw_content.splitlines()]
                      cleaned_text = ''.join(lines).replace(' ', '').replace('\t', '')
                      
-                     raw_snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]
+                     # tuple index 4 is src_start, 5 is src_end
+                     raw_snippet = cleaned_text[start_evt[4] : end_evt[5]]
                      
                      # Prepend resolution
                      if not re.match(r'^\{[\d\.]+\}', raw_snippet):
-                        res = start_evt.get('resolution', 4)
-                        if isinstance(res, (int, float)) and hasattr(res, 'is_integer') and res.is_integer():
+                        res = start_evt[3] # Index 3 is resolution
+                        # Handle float vs int formatting
+                        if isinstance(res, (int, float)) and int(res) == res:
                             res_str = str(int(res))
                         else:
                             res_str = str(res)
@@ -141,95 +161,101 @@ class RhythmSearcher:
                 
         return results
 
-    def _match_pattern(self, chart_events: List[dict], query_events: List[dict], tolerance: float, bpm_min: float = None, bpm_max: float = None) -> Optional[Tuple[Tuple[int, int], float]]:
+    def _match_pattern(self, 
+                       chart_events: List[Tuple], # Changed to List[Tuple]
+                       query_events: List[Dict], 
+                       tolerance: float,
+                       bpm_min: Optional[float] = None,
+                       bpm_max: Optional[float] = None) -> Optional[Tuple[Tuple[int, int], float]]:
         """
-        Checks if query sequence exists in chart_events.
-        Returns ((start_idx, end_idx), match_degree) of the BEST match in chart_events, or None.
+        Matches query pattern against chart events.
+        chart_events: List of (time, bpm, is_star, resolution, src_start, src_end)
+        Returns: ((start_idx, end_idx), match_degree) or None
         """
-        n_query = len(query_events)
-        n_chart = len(chart_events)
-        
-        if n_query > n_chart:
+        if not chart_events or not query_events:
             return None
             
-        best_match = None
+        n_chart = len(chart_events)
+        n_query = len(query_events)
+        
+        # Pre-extract chart times for binary search
+        # chart_events[i][0] is time
+        # DEBUG
+        if len(chart_events) > 0 and isinstance(chart_events[0], dict):
+             print(f"ERROR: Chart events are still dicts! Type: {type(chart_events[0])}")
+        
+        chart_times = [e[0] for e in chart_events]
+        
+        best_match = None # ((start, end), degree)
         best_degree = -1.0
-
+        
+        # Iterate through possible start points in the chart
         for i in range(n_chart):
-            # Optimization: If remaining events are fewer than query, stop
-            if n_chart - i < n_query:
+            # Optimization: If remaining notes < query length, impossible to full match (simple heuristic)
+            if i + n_query > n_chart:
                 break
-                
-            start_event = chart_events[i]
-            base_time = start_event['time']
-            
-            # Check Start Event Constraints
-            if bpm_min is not None and start_event['bpm'] < bpm_min:
+
+            # 1. BPM Check (if strict range)
+            current_bpm = chart_events[i][1]
+            if bpm_min and current_bpm < bpm_min:
                 continue
-            if bpm_max is not None and start_event['bpm'] > bpm_max:
+            if bpm_max and current_bpm > bpm_max:
                 continue
-            if query_events[0]['is_star'] and not start_event['is_star']:
+                
+            # 2. Star Check (First note)
+            if query_events[0]['is_star'] and not chart_events[i][2]:
                 continue
-            
-            match = True
-            
-            current_chart_idx = i
-            last_match_idx = i
-            
-            for k in range(1, n_query):
-                q_evt = query_events[k]
-                target_time = base_time + q_evt['delta']
                 
-                found_k = False
+            # 3. Sequence Match
+            start_time = chart_events[i][0]
+            current_match_count = 0
+            
+            # Start index in chart for subsequence
+            curr_chart_idx = i
+            
+            possible_match = True
+            
+            for j in range(n_query):
+                target_delta = query_events[j]['delta']
+                target_time = start_time + target_delta
                 
-                while current_chart_idx < n_chart:
-                    c_evt = chart_events[current_chart_idx]
-                    t_diff = c_evt['time'] - target_time
-                    
-                    if t_diff < -tolerance:
-                        current_chart_idx += 1
-                        continue
-                    elif t_diff > tolerance:
-                        break
-                    else:
-                        valid_note = True
-                        if bpm_min is not None and c_evt['bpm'] < bpm_min:
-                            valid_note = False
-                        if bpm_max is not None and c_evt['bpm'] > bpm_max:
-                            valid_note = False
-                        if q_evt['is_star'] and not c_evt['is_star']:
-                            valid_note = False
-                            
-                        if valid_note:
-                            found_k = True
-                            last_match_idx = current_chart_idx
-                            current_chart_idx += 1 
-                            break 
+                required_is_star = query_events[j]['is_star']
+                
+                # Find event in chart closest to target_time
+                idx = bisect_left(chart_times, target_time - tolerance, lo=curr_chart_idx, hi=n_chart)
+                
+                found_note = False
+                for k in range(idx, min(idx + 5, n_chart)):
+                    t = chart_times[k]
+                    if abs(t - target_time) <= tolerance:
+                        if required_is_star and not chart_events[k][2]:
+                            continue 
+                        if bpm_min and chart_events[k][1] < bpm_min:
+                             continue
+                        if bpm_max and chart_events[k][1] > bpm_max:
+                             continue
                         
-                        current_chart_idx += 1
+                        found_note = True
+                        curr_chart_idx = k + 1 
+                        current_match_count += 1
+                        break
+                    if t > target_time + tolerance:
+                        break 
                 
-                if not found_k:
-                    match = False
+                if not found_note:
+                    possible_match = False
                     break
             
-            if match:
-                # Calculate degree
-                # Range is [i, last_match_idx] (inclusive)
-                chart_notes_count = last_match_idx - i + 1
-                degree = n_query / chart_notes_count
+            if possible_match:
+                match_end_idx = curr_chart_idx - 1
+                chart_segment_len = match_end_idx - i + 1
+                degree = n_query / chart_segment_len if chart_segment_len > 0 else 0
                 
                 if degree > best_degree:
                     best_degree = degree
-                    best_match = (i, last_match_idx)
-                
-                # Optimization: If we found a 100% match, we can just return it immediately if we don't care about finding ALL?
-                # Actually, the user might want a specific region, but for "Best Match found in chart", 1.0 is max.
-                # However, there might be multiple 1.0 matches, does it matter which one?
-                # Let's say we just keep looking to be safe or break on 1.0. 
+                    best_match = ((i, match_end_idx), degree)
+                    
                 if degree >= 1.0:
-                    return ((i, last_match_idx), degree)
-
-        if best_match:
-            return (best_match, best_degree)
+                    return best_match
                 
-        return None
+        return best_match
