@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
+from contextlib import asynccontextmanager
 import uvicorn
 import os
 import shutil
@@ -9,23 +10,12 @@ import json
 
 from simai_search.search import RhythmSearcher
 
-app = FastAPI(title="Maichart Index Search")
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Searcher
 DB_PATH = "maichart.db"  # Hardcoded as in main.py
 searcher = None
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global searcher
     if os.path.exists(DB_PATH):
         try:
@@ -36,6 +26,21 @@ async def startup_event():
             searcher = None
     else:
         print("Database not found. Please run 'python main.py build' first.")
+    yield
+    # Clean up if needed
+
+app = FastAPI(title="Maichart Index Search", lifespan=lifespan)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 @app.get("/api/search")
 def search(
@@ -70,13 +75,14 @@ def search(
     
     # Format results
     json_results = []
-    for title, diff_name, level, chart_id, snippet in results:
+    for title, diff_name, level, chart_id, snippet, degree in results:
         json_results.append({
             "title": title,
             "difficulty": diff_name,
             "level": level,
             "id": chart_id,
-            "snippet": snippet
+            "snippet": snippet,
+            "match_degree": degree
         })
         
     return {"count": len(results), "results": json_results}

@@ -175,11 +175,12 @@ class SimaiParser:
                 # Commit step
                 # The text segment for this beat is from step_start_idx to i (inclusive of comma?)
                 # Let's say we include the comma to be safe, or just up to i.
-                # User wants "Simai code". `1,2,` -> `1,` is good context.
+                # User wants "Simai code". `1,2,`
                 if step_has_note:
                     events.append({
                         'time': round(current_time, 4),
                         'bpm': current_bpm,
+                        'resolution': resolution,
                         'is_star': step_has_star,
                         'src_start': step_start_idx,
                         'src_end': i + 1 # Include the comma
@@ -232,6 +233,7 @@ class SimaiParser:
              events.append({
                 'time': round(current_time, 4),
                 'bpm': current_bpm,
+                'resolution': resolution,
                 'is_star': step_has_star,
                 'src_start': step_start_idx,
                 'src_end': i # End of string

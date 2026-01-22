@@ -38,7 +38,8 @@ class RhythmSearcher:
         
         results = []
         
-        # Fetch charts matching criteria
+                
+                # Fetch charts matching criteria
         filtered_charts = self.db.get_charts(
             level_min=level_min,
             level_max=level_max,
@@ -52,8 +53,9 @@ class RhythmSearcher:
                 
                 # chart_events is list of dicts: {'time', 'bpm', 'is_star', 'src_start', 'src_end'}
                 
-                match_indices = self._match_pattern(chart_events, query_events, tolerance, bpm_min, bpm_max)
-                if match_indices:
+                match_result = self._match_pattern(chart_events, query_events, tolerance, bpm_min, bpm_max)
+                if match_result:
+                     match_indices, degree = match_result
                      # Reconstruct snippet
                      # match_indices is (start_event_idx, end_event_idx)
                      # Snip from chart_events[start].start to chart_events[end].end
@@ -70,22 +72,40 @@ class RhythmSearcher:
                      lines = [re.sub(r'//.*', '', line) for line in raw_content.splitlines()]
                      cleaned_text = ''.join(lines).replace(' ', '').replace('\t', '')
                      
-                     snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]
+                     raw_snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]
+                     
+                     # Prepend resolution if not already present at start
+                     # Check if raw_snippet starts with {number}
+                     if not re.match(r'^\{[\d\.]+\}', raw_snippet):
+                        # Resolution is stored in start_evt['resolution'] (float)
+                        # Convert to int if whole number
+                        res = start_evt.get('resolution', 4)
+                        if res.is_integer():
+                            res_str = str(int(res))
+                        else:
+                            res_str = str(res)
+                            
+                        snippet = f"{{{res_str}}}{raw_snippet}"
+                     else:
+                        snippet = raw_snippet
                      
                      # Map difficulty number to name
                      diff_names = {1: "Easy", 2: "Basic", 3: "Advanced", 4: "Expert", 5: "Master", 6: "ReMaster"}
                      diff_name = diff_names.get(difficulty, str(difficulty))
-                     results.append((song_title, diff_name, level, chart_id, snippet))
+                     results.append((song_title, diff_name, level, chart_id, snippet, degree))
             except Exception as e:
                 # print(f"Error searching chart {chart_id}: {e}")
                 continue
+        
+        # Sort by degree (descending)
+        results.sort(key=lambda x: x[5], reverse=True)
                 
         return results
 
-    def _match_pattern(self, chart_events: List[dict], query_events: List[dict], tolerance: float, bpm_min: float = None, bpm_max: float = None) -> Tuple[int, int]:
+    def _match_pattern(self, chart_events: List[dict], query_events: List[dict], tolerance: float, bpm_min: float = None, bpm_max: float = None) -> Optional[Tuple[Tuple[int, int], float]]:
         """
         Checks if query sequence exists in chart_events.
-        Returns (start_idx, end_idx) of the match in chart_events, or None.
+        Returns ((start_idx, end_idx), match_degree) of the BEST match in chart_events, or None.
         """
         n_query = len(query_events)
         n_chart = len(chart_events)
@@ -93,6 +113,9 @@ class RhythmSearcher:
         if n_query > n_chart:
             return None
             
+        best_match = None
+        best_degree = -1.0
+
         for i in range(n_chart):
             # Optimization: If remaining events are fewer than query, stop
             if n_chart - i < n_query:
@@ -108,7 +131,7 @@ class RhythmSearcher:
                 continue
             if query_events[0]['is_star'] and not start_event['is_star']:
                 continue
-                
+            
             match = True
             
             current_chart_idx = i
@@ -151,6 +174,23 @@ class RhythmSearcher:
                     break
             
             if match:
-                return (i, last_match_idx)
+                # Calculate degree
+                # Range is [i, last_match_idx] (inclusive)
+                chart_notes_count = last_match_idx - i + 1
+                degree = n_query / chart_notes_count
+                
+                if degree > best_degree:
+                    best_degree = degree
+                    best_match = (i, last_match_idx)
+                
+                # Optimization: If we found a 100% match, we can just return it immediately if we don't care about finding ALL?
+                # Actually, the user might want a specific region, but for "Best Match found in chart", 1.0 is max.
+                # However, there might be multiple 1.0 matches, does it matter which one?
+                # Let's say we just keep looking to be safe or break on 1.0. 
+                if degree >= 1.0:
+                    return ((i, last_match_idx), degree)
+
+        if best_match:
+            return (best_match, best_degree)
                 
         return None

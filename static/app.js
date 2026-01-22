@@ -69,18 +69,23 @@ async function performSearch() {
 }
 
 function renderResults(results) {
-    resultsGrid.innerHTML = results.map(res => `
+    resultsGrid.innerHTML = results.map(res => {
+        const percent = Math.round((res.match_degree || 0) * 100);
+        return `
         <div class="result-card">
             <div class="card-header">
                 <div>
                     <div class="song-title">${res.title}</div>
                     <div style="color: var(--text-muted); font-size: 0.85rem;">Level ${res.level}</div>
                 </div>
-                <div class="diff-badge diff-${res.difficulty}">${res.difficulty}</div>
+                <div style="text-align: right;">
+                    <div class="diff-badge diff-${res.difficulty}">${res.difficulty}</div>
+                    <div style="margin-top:4px; font-size: 0.8rem; color: var(--primary);">Match: ${percent}%</div>
+                </div>
             </div>
             <div class="snippet-box">${res.snippet}</div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 searchBtn.addEventListener('click', performSearch);

@@ -43,8 +43,9 @@ def cmd_search(args):
     )
     
     print(f"Found {len(results)} matches:")
-    for title, diff, level, _, snippet in results:
-        print(f"[{diff} {level}] {title}")
+    print(f"Found {len(results)} matches:")
+    for title, diff, level, _, snippet, degree in results:
+        print(f"[{diff} {level}] {title} (Match: {degree:.0%})")
         print(f"    Match: {snippet}")
 
 def main():
