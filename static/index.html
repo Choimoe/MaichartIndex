@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maichart Index</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-glow"></div>
+    <div class="container">
+        <header>
+            <h1>Maichart Index</h1>
+            <p>Advanced Simai Rhythm Search Engine</p>
+        </header>
+
+        <main>
+            <div class="search-box">
+                <input type="text" id="queryInput" placeholder="Enter Simai code (e.g., {8}1*,1,1,)" autocomplete="off">
+                <button id="searchBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    Search
+                </button>
+            </div>
+
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Level Range</label>
+                    <div class="range-inputs">
+                        <input type="number" id="levelMin" placeholder="Min" step="0.1">
+                        <span>-</span>
+                        <input type="number" id="levelMax" placeholder="Max" step="0.1">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>BPM Range</label>
+                    <div class="range-inputs">
+                        <input type="number" id="bpmMin" placeholder="Min" step="1">
+                        <span>-</span>
+                        <input type="number" id="bpmMax" placeholder="Max" step="1">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Designer</label>
+                    <input type="text" id="designerInput" placeholder="Designer Name">
+                </div>
+                <!-- Difficulty Toggles -->
+                <div class="filter-group full-width">
+                     <label>Difficulty</label>
+                     <div class="diff-toggles" id="diffToggles">
+                         <button class="diff-btn" data-val="Expert">Expert</button>
+                         <button class="diff-btn" data-val="Master">Master</button>
+                         <button class="diff-btn" data-val="ReMaster">Re:Master</button>
+                         <button class="diff-btn" data-val="Advanced">Advanced</button>
+                         <button class="diff-btn" data-val="Basic">Basic</button>
+                         <button class="diff-btn" data-val="Easy">Easy</button>
+                     </div>
+                </div>
+            </div>
+
+            <div class="results-info" id="resultsInfo" style="display: none;">
+                Found <span id="matchCount">0</span> matches
+            </div>
+
+            <div id="resultsGrid" class="results-grid">
+                <!-- Results will be injected here -->
+            </div>
+            
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div> Searching...
+            </div>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
