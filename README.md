@@ -10,29 +10,34 @@ MaichartIndex 是一个用于解析、索引和检索 Simai 格式谱面的工�
 *   **多维筛选**: 支持按难度等级（Level）、难度类型（Difficulty）、谱师（Designer）过滤搜索结果。
 *   **SQL存储**: 使用 SQLite 存储索引数据，轻量且易于迁移。
 
-## 快速开始
+## 快速开始 (使用 Release 版本)
 
-### 1. 安装
-确保 Python 3.10+ 环境。
+推荐普通用户直接下载编译好的可执行文件，无需安装 Python 环境。
 
-### 2. 构建索引
-将你的 Simai 格式数据（`maidata.txt` 文件）放在 `data/Maichart-Converts` 目录下（或修改源码中的路径），然后运行：
+### 1. 下载
+前往 [Releases 页面](https://github.com/Choimoe/MaichartIndex/releases) 下载最新版本的附件：
+*   **MaichartIndex-Tools-vX.X.zip** (包含 `maichart-webui.exe` 和 `maichart-cli.exe`)
+*   **MaichartIndex-Database-vX.X.zip** (包含 `maichart.db`)
+
+### 2. 安装
+1.  解压 `MaichartIndex-Tools` 压缩包到任意文件夹。
+2.  解压 `MaichartIndex-Database` 中的 `maichart.db` 文件，将其放到工具所在的**同一级目录**。
+
+### 3. 运行 Web 界面
+双击运行 `maichart-webui.exe`。
+程序启动后（控制台显示 "Uvicorn running..."），打开浏览器访问 `http://localhost:8000` 即可使用。
+
+### 4. 运行命令行工具
+在文件夹中打开终端（PowerShell 或 CMD），运行：
 ```powershell
-python main.py build
+.\maichart-cli.exe search "{8}1,1,1,"
 ```
 
-### 3. 使用 Web 界面 (推荐)
-启动可视化搜索服务：
-```powershell
-python main.py serve
-```
-访问 `http://localhost:8000` 即可通过图形界面进行搜索和筛选。
+---
 
-### 4. 命令行搜索 (CLI)
-搜索一个 16 分音符的五连打节奏，筛选 Master 难度且等级大于 13.0 的谱面：
-```powershell
-python main.py search "{16}1,1,1,1,1,,1,1,1,,1,1,1," --diff Master --level-min 13.0
-```
+## 开发者与高阶使用
+
+如果您希望从源代码构建，或在 Linux/macOS 环境下运行，请参阅文档中的 [从代码构建](https://choimoe.github.io/MaichartIndex/build/) 章节。
 
 ## 文档及模块
 详细文档请参考 [Wiki/Docs](https://choimoe.github.io/MaichartIndex/) (构建后生成)。

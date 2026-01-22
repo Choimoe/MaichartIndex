@@ -32,8 +32,8 @@ jobs:
         pyinstaller --onefile --name maichart-cli main.py
         
         # Build Web (Server)
-        # Name it maichart-web.exe, include static files
-        pyinstaller --onefile --name maichart-web --add-data "static;static" server.py
+        # Name it maichart-webui.exe, include static files
+        pyinstaller --onefile --name maichart-webui --add-data "static;static" server.py
         
     - name: Organize Artifacts
       shell: pwsh
@@ -41,11 +41,10 @@ jobs:
         $TAG = "${{ github.ref_name }}"
         $ROOT = "MaichartIndex-Tools-$TAG"
         
-        New-Item -ItemType Directory -Path "$ROOT\Client" -Force
-        New-Item -ItemType Directory -Path "$ROOT\Web" -Force
+        New-Item -ItemType Directory -Path "$ROOT" -Force
         
-        Copy-Item "dist\maichart-cli.exe" -Destination "$ROOT\Client\"
-        Copy-Item "dist\maichart-web.exe" -Destination "$ROOT\Web\"
+        Copy-Item "dist\maichart-cli.exe" -Destination "$ROOT\"
+        Copy-Item "dist\maichart-webui.exe" -Destination "$ROOT\"
         
         # Compress
         Compress-Archive -Path "$ROOT" -DestinationPath "$ROOT.zip"
@@ -58,12 +57,13 @@ jobs:
     
   build-db:
     runs-on: windows-latest
-    needs: build-tools # Optional: Run independent? Maybe safer to run parallel. Removed needs.
     permissions:
       contents: write
       
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     
     - name: Set up Python
       uses: actions/setup-python@v4
