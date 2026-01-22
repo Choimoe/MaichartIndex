@@ -53,9 +53,18 @@ def cmd_search(args):
 def cmd_serve(args):
     import uvicorn
     import server
-    print(f"Starting server at http://{args.host}:{args.port}")
+    
+    port = args.port
+    if port is None or port == 0:
+        # Use random port from server.py logic
+        port = server.get_random_port()
+        if port == 0:
+            print("Error: Could not find an available port.")
+            return
+
+    print(f"Starting server at http://{args.host}:{port}")
     # We pass the app object directly
-    uvicorn.run(server.app, host=args.host, port=args.port)
+    uvicorn.run(server.app, host=args.host, port=port)
 
 def main():
     parser = argparse.ArgumentParser(description="Simai Chart Search")
@@ -73,7 +82,7 @@ def main():
     parser_search.add_argument("--bpm-max", type=float, help="Maximum BPM for the pattern")
     
     parser_serve = subparsers.add_parser("serve", help="Run the web server")
-    parser_serve.add_argument("--port", type=int, default=8000, help="Port to run server on")
+    parser_serve.add_argument("--port", type=int, default=0, help="Port to run server on (0 for random)")
     parser_serve.add_argument("--host", type=str, default="0.0.0.0", help="Host interface")
     
     args = parser.parse_args()

@@ -11,6 +11,21 @@ import json
 from simai_search.search import RhythmSearcher
 
 import sys
+import socket
+import random
+
+def get_random_port(start=50000, end=60000):
+    """Find a random available port in range."""
+    for _ in range(50):
+        port = random.randint(start, end)
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('0.0.0.0', port))
+                return port
+        except OSError:
+            continue
+    return 0 # Fail code
+
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -102,5 +117,15 @@ def search(
 # Mount static files
 app.mount("/", StaticFiles(directory=resource_path("static"), html=True), name="static")
 
+
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    is_frozen = getattr(sys, 'frozen', False)
+    # Reload only if NOT frozen (development mode)
+    if is_frozen:
+        # Pass app object directly in frozen mode to avoid import issues
+        port = get_random_port()
+        print(f"Starting server at http://0.0.0.0:{port}")
+        uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
+    else:
+        # String import string for reload to work in dev
+        uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

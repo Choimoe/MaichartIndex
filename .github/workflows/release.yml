@@ -28,11 +28,9 @@ jobs:
     - name: Build Tools
       run: |
         # Build Client (CLI)
-        # Assuming main.py can run as client. Name it maichart-cli.exe
-        pyinstaller --onefile --name maichart-cli main.py
+        pyinstaller --onefile --name maichart-cli --add-data "static;static" main.py
         
         # Build Web (Server)
-        # Name it maichart-webui.exe, include static files
         pyinstaller --onefile --name maichart-webui --add-data "static;static" server.py
         
     - name: Organize Artifacts
@@ -46,7 +44,6 @@ jobs:
         Copy-Item "dist\maichart-cli.exe" -Destination "$ROOT\"
         Copy-Item "dist\maichart-webui.exe" -Destination "$ROOT\"
         
-        # Compress
         Compress-Archive -Path "$ROOT" -DestinationPath "$ROOT.zip"
         
     - name: Create Release
