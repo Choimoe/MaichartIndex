@@ -84,7 +84,7 @@ class SimaiDB:
         cursor = self.conn.cursor()
         
         query = '''
-            SELECT c.id, s.title, c.difficulty, c.level, c.note_data, c.raw_content
+            SELECT c.id, s.title, c.difficulty, c.level, c.note_data, c.raw_content, c.designer
             FROM charts c
             JOIN songs s ON c.song_id = s.id
             WHERE 1=1

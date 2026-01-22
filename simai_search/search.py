@@ -38,7 +38,7 @@ class RhythmSearcher:
             designer=designer
         )
         
-        for chart_id, song_title, difficulty, level, note_data_json, raw_content in filtered_charts:
+        for chart_id, song_title, difficulty, level, note_data_json, raw_content, designer in filtered_charts:
             try:
                 chart_events = json.loads(note_data_json)
                 
