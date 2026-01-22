@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,29 +10,42 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div class="background-glow"></div>
     <div class="container">
         <header>
             <h1>Maichart Index</h1>
-            <p>Advanced Simai Rhythm Search Engine</p>
+            <p>从采音搜索官谱配置</p>
         </header>
 
         <main>
             <div class="search-box">
-                <input type="text" id="queryInput" placeholder="Enter Simai code (e.g., {8}1*,1,1,)" autocomplete="off">
+                <input type="text" id="queryInput" placeholder="输入 Simai 格式的采音 (e.g., {8}1*,1,1,)" autocomplete="off">
                 <button id="searchBtn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    Search
+                    搜索
                 </button>
             </div>
 
+            <details class="help-card">
+                <summary>如何使用搜索？</summary>
+                <div class="help-content">
+                    <p>输入 Simai 格式的采音以搜索匹配的模式。</p>
+                    <ul>
+                        <li><strong>复合节奏:</strong> <code>{8}1,1,1,{12}1,1,1,{16}1,1,1,</code></li>
+                        <li><strong>星星:</strong> <code>{8}1*,1,1*,1,1*,1,1*,1,</code></li>
+                    </ul>
+                    <p class="tip"><strong>注意：</strong> 键位数字会被忽略，只匹配节奏。</p>
+                </div>
+            </details>
+
             <div class="filters">
                 <div class="filter-group">
-                    <label>Level Range</label>
+                    <label>定数范围</label>
                     <div class="range-inputs">
                         <input type="number" id="levelMin" placeholder="Min" step="0.1">
                         <span>-</span>
@@ -39,7 +53,7 @@
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label>BPM Range</label>
+                    <label>BPM 范围</label>
                     <div class="range-inputs">
                         <input type="number" id="bpmMin" placeholder="Min" step="1">
                         <span>-</span>
@@ -47,37 +61,38 @@
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label>Designer</label>
-                    <input type="text" id="designerInput" placeholder="Designer Name">
+                    <label>谱师</label>
+                    <input type="text" id="designerInput" placeholder="谱师">
                 </div>
                 <!-- Difficulty Toggles -->
                 <div class="filter-group full-width">
-                     <label>Difficulty</label>
-                     <div class="diff-toggles" id="diffToggles">
-                         <button class="diff-btn" data-val="Expert">Expert</button>
-                         <button class="diff-btn" data-val="Master">Master</button>
-                         <button class="diff-btn" data-val="ReMaster">Re:Master</button>
-                         <button class="diff-btn" data-val="Advanced">Advanced</button>
-                         <button class="diff-btn" data-val="Basic">Basic</button>
-                         <button class="diff-btn" data-val="Easy">Easy</button>
-                     </div>
+                    <label>难度</label>
+                    <div class="diff-toggles" id="diffToggles">
+                        <button class="diff-btn" data-val="Expert">Expert</button>
+                        <button class="diff-btn" data-val="Master">Master</button>
+                        <button class="diff-btn" data-val="ReMaster">Re:Master</button>
+                        <button class="diff-btn" data-val="Advanced">Advanced</button>
+                        <button class="diff-btn" data-val="Basic">Basic</button>
+                        <button class="diff-btn" data-val="Easy">Easy</button>
+                    </div>
                 </div>
             </div>
 
             <div class="results-info" id="resultsInfo" style="display: none;">
-                Found <span id="matchCount">0</span> matches
+                找到 <span id="matchCount">0</span> 个结果
             </div>
 
             <div id="resultsGrid" class="results-grid">
                 <!-- Results will be injected here -->
             </div>
-            
+
             <div id="loading" class="loading" style="display: none;">
-                <div class="spinner"></div> Searching...
+                <div class="spinner"></div> 搜索中...
             </div>
         </main>
     </div>
-    
+
     <script src="app.js"></script>
 </body>
+
 </html>
