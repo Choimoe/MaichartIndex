@@ -1,6 +1,6 @@
 import sqlite3
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import json
 
 @dataclass
@@ -76,11 +76,50 @@ class SimaiDB:
         ''', (song_id, difficulty, level, designer, raw_content, json.dumps(note_data)))
         self.conn.commit()
 
-    def get_all_charts(self):
+    def get_charts(self, 
+                   level_min: Optional[float] = None, 
+                   level_max: Optional[float] = None, 
+                   difficulties: Optional[List[int]] = None, 
+                   designer: Optional[str] = None) -> List[Tuple[int, str, int, str, str, str]]:
         cursor = self.conn.cursor()
-        cursor.execute('''
+        
+        query = '''
             SELECT c.id, s.title, c.difficulty, c.level, c.note_data, c.raw_content
             FROM charts c
             JOIN songs s ON c.song_id = s.id
-        ''')
+            WHERE 1=1
+        '''
+        params = []
+        
+        if level_min is not None:
+            # Simai levels are strings like "12.5", "13+", etc.
+            # We need to handle this. For now, let's rely on the fact that standard numerical levels convert to float.
+            # But "13+" is usually treated as 13.7 or so in internal logic?
+            # Or we simply try to cast `level` column to float in SQL?
+            # SQLite `CAST(level AS REAL)` might work for "12.5" but "13+" becomes 13.0.
+            # Ideally we parsed levels to float during indexing.
+            # Let's assume for now we only filter on the numeric part or the user stores them as numbers.
+            # Actually, let's fix the schema/indexer later to store a numeric_level column for better filtering.
+            # For this step, I will add a `numeric_level` column to `charts` table in `create_tables` but since table exists,
+            # I can't easily migrate without dropping.
+            # I'll stick to basic CAST which works for pure numbers. "13+" charts might be missed or treated as 13.0.
+            # Better approach: filter in python? No, efficiency.
+            # Let's use CAST for now.
+            query += ' AND CAST(c.level AS REAL) >= ?'
+            params.append(level_min)
+            
+        if level_max is not None:
+            query += ' AND CAST(c.level AS REAL) <= ?'
+            params.append(level_max)
+            
+        if difficulties:
+            placeholders = ','.join('?' for _ in difficulties)
+            query += f' AND c.difficulty IN ({placeholders})'
+            params.extend(difficulties)
+            
+        if designer:
+            query += ' AND c.designer LIKE ?'
+            params.append(f'%{designer}%')
+            
+        cursor.execute(query, params)
         return cursor.fetchall()

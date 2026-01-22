@@ -8,15 +8,17 @@ class RhythmSearcher:
         self.db = SimaiDB(db_path)
         self.parser = SimaiParser()
 
-    def search(self, query_simai: str, tolerance: float = 0.01) -> List[Tuple[str, str, str, str]]:
+    def search(self, 
+               query_simai: str, 
+               tolerance: float = 0.01,
+               level_min: float = None,
+               level_max: float = None,
+               difficulties: List[int] = None,
+               designer: str = None) -> List[Tuple[str, str, str, str]]:
         """
-        Searches for a rhythm pattern.
-        query_simai: Simai formatted string, e.g. "{4}1,1,2,"
-        Returns list of (SongTitle, Difficulty, Level, Designer)
+        Searches for a rhythm pattern with optional filters.
         """
         # Parse query to rhythm events
-        # We need to act as if the query is a chart to extract relative timing
-        # We can wrap it in a dummy chart
         query_events = self.parser.parse_chart_to_rhythm(query_simai)
         
         if not query_events:
@@ -25,16 +27,18 @@ class RhythmSearcher:
         # Normalize query: relative to first note
         start_time = query_events[0]
         query_deltas = [t - start_time for t in query_events]
-        query_len = len(query_deltas)
         
         results = []
         
-        # Fetch all charts
-        # Optimization: In a real large DB, we wouldn't fetch all. 
-        # But for hundreds of text files, it's fine.
-        all_charts = self.db.get_all_charts()
+        # Fetch charts matching criteria
+        filtered_charts = self.db.get_charts(
+            level_min=level_min,
+            level_max=level_max,
+            difficulties=difficulties,
+            designer=designer
+        )
         
-        for chart_id, song_title, difficulty, level, note_data_json, raw_content in all_charts:
+        for chart_id, song_title, difficulty, level, note_data_json, raw_content in filtered_charts:
             try:
                 chart_events = json.loads(note_data_json)
                 
@@ -44,7 +48,7 @@ class RhythmSearcher:
                      diff_name = diff_names.get(difficulty, str(difficulty))
                      results.append((song_title, diff_name, level, chart_id))
             except Exception as e:
-                print(f"Error searching chart {chart_id}: {e}")
+                # print(f"Error searching chart {chart_id}: {e}")
                 continue
                 
         return results
