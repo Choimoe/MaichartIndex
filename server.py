@@ -48,6 +48,8 @@ async def lifespan(app: FastAPI):
         try:
             searcher = RhythmSearcher(DB_PATH)
             print("Searcher initialized.")
+            # Pre-load cache for performance
+            searcher._ensure_cache()
         except Exception as e:
             print(f"Failed to initialize searcher: {e}")
             searcher = None

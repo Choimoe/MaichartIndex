@@ -8,6 +8,56 @@ class RhythmSearcher:
     def __init__(self, db_path: str):
         self.db = SimaiDB(db_path)
         self.parser = SimaiParser()
+        self.chart_cache = None
+
+    def _ensure_cache(self):
+        """Lazy load all charts into memory and pre-parse JSON."""
+        if self.chart_cache is not None:
+            return
+
+        print("Loading charts into memory...")
+        # Fetch ALL charts from DB
+        raw_rows = self.db.get_charts()
+        
+        cache = []
+        for chart_id, song_title, difficulty, level, note_data_json, raw_content, designer in raw_rows:
+            try:
+                # Pre-parse event data
+                events = json.loads(note_data_json)
+                
+                # Pre-calculate numeric level for faster filtering
+                # Simai levels: "13", "13+", "12.5"
+                # If it's "13+", treated as 13.7 (approx) or just let's try to parse
+                numeric_level = 0.0
+                try:
+                    if '+' in level:
+                        base = float(level.replace('+', ''))
+                        numeric_level = base + 0.5 # Standard mapping usually + is .7 but let's say .5 for sorting/range? 
+                        # Actually standard convention: 13+ is 13.7-13.9. 
+                        # But user inputs 13.5. 
+                        # Let's just use simple parsing:
+                        numeric_level = base + 0.6 # slightly more than .5
+                    else:
+                        numeric_level = float(level)
+                except ValueError:
+                    pass
+
+                cache.append({
+                    'id': chart_id,
+                    'title': song_title,
+                    'difficulty': difficulty,
+                    'level_str': level,
+                    'level_num': numeric_level,
+                    'events': events,
+                    'raw_content': raw_content,
+                    'designer': designer or ""
+                })
+            except Exception as e:
+                print(f"Skipping chart {chart_id} due to error: {e}")
+                continue
+        
+        self.chart_cache = cache
+        print(f"Loaded {len(self.chart_cache)} charts.")
 
     def search(self, 
                query_simai: str, 
@@ -19,9 +69,11 @@ class RhythmSearcher:
                bpm_min: float = None,
                bpm_max: float = None) -> List[Tuple[str, str, str, str, str]]:
         """
-        Searches for a rhythm pattern with optional filters.
-        Returns: (SongTitle, Difficulty, Level, ID, Snippet)
+        Searches for a rhythm pattern using in-memory cache.
+        Returns: (SongTitle, Difficulty, Level, ID, Snippet, MatchDegree)
         """
+        self._ensure_cache()
+        
         # Parse query to rhythm events
         query_events = self.parser.parse_chart_to_rhythm(query_simai)
         
@@ -29,72 +81,57 @@ class RhythmSearcher:
             return []
             
         # Normalize query: relative to first note
-        # query_events is now List[Dict]
         start_time = query_events[0]['time']
-        
-        # We store relative time in the query dicts for easier matching
         for q in query_events:
             q['delta'] = q['time'] - start_time
         
         results = []
         
+        # In-memory filtering and matching
+        for chart in self.chart_cache:
+            # 1. Filter Check
+            if level_min is not None and chart['level_num'] < level_min:
+                continue
+            if level_max is not None and chart['level_num'] > level_max:
+                continue
+            if difficulties and chart['difficulty'] not in difficulties:
+                continue
+            if designer and designer.lower() not in chart['designer'].lower():
+                continue
                 
-                # Fetch charts matching criteria
-        filtered_charts = self.db.get_charts(
-            level_min=level_min,
-            level_max=level_max,
-            difficulties=difficulties,
-            designer=designer
-        )
-        
-        for chart_id, song_title, difficulty, level, note_data_json, raw_content, designer in filtered_charts:
+            # 2. Pattern Match
             try:
-                chart_events = json.loads(note_data_json)
-                
-                # chart_events is list of dicts: {'time', 'bpm', 'is_star', 'src_start', 'src_end'}
-                
-                match_result = self._match_pattern(chart_events, query_events, tolerance, bpm_min, bpm_max)
+                match_result = self._match_pattern(chart['events'], query_events, tolerance, bpm_min, bpm_max)
                 if match_result:
                      match_indices, degree = match_result
-                     # Reconstruct snippet
-                     # match_indices is (start_event_idx, end_event_idx)
-                     # Snip from chart_events[start].start to chart_events[end].end
-                     start_evt = chart_events[match_indices[0]]
-                     end_evt = chart_events[match_indices[1]]
                      
-                     # We need the "cleaned" text to use these indices?
-                     # The indices in `parser.py` are based on the *cleaned* text.
-                     # `raw_content` in DB is the *original* text (with comments/newlines).
-                     # IMPORTANT: We need to re-clean the raw_content to match the indices.
-                     # Or `parser.py` logic implies we need the cleaned text.
+                     start_evt = chart['events'][match_indices[0]]
+                     end_evt = chart['events'][match_indices[1]]
                      
-                     # Re-clean raw content
-                     lines = [re.sub(r'//.*', '', line) for line in raw_content.splitlines()]
+                     # Re-clean raw content to extract snippet
+                     lines = [re.sub(r'//.*', '', line) for line in chart['raw_content'].splitlines()]
                      cleaned_text = ''.join(lines).replace(' ', '').replace('\t', '')
                      
                      raw_snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]
                      
-                     # Prepend resolution if not already present at start
-                     # Check if raw_snippet starts with {number}
+                     # Prepend resolution
                      if not re.match(r'^\{[\d\.]+\}', raw_snippet):
-                        # Resolution is stored in start_evt['resolution'] (float)
-                        # Convert to int if whole number
                         res = start_evt.get('resolution', 4)
-                        if res.is_integer():
+                        if isinstance(res, (int, float)) and hasattr(res, 'is_integer') and res.is_integer():
                             res_str = str(int(res))
                         else:
                             res_str = str(res)
-                            
                         snippet = f"{{{res_str}}}{raw_snippet}"
                      else:
                         snippet = raw_snippet
                      
                      # Map difficulty number to name
                      diff_names = {1: "Easy", 2: "Basic", 3: "Advanced", 4: "Expert", 5: "Master", 6: "ReMaster"}
-                     diff_name = diff_names.get(difficulty, str(difficulty))
-                     results.append((song_title, diff_name, level, chart_id, snippet, degree))
-            except Exception as e:
-                # print(f"Error searching chart {chart_id}: {e}")
+                     diff_name = diff_names.get(chart['difficulty'], str(chart['difficulty']))
+                     
+                     results.append((chart['title'], diff_name, chart['level_str'], chart['id'], snippet, degree))
+                     
+            except Exception:
                 continue
         
         # Sort by degree (descending)
