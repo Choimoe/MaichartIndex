@@ -27,8 +27,8 @@
 | `difficulty` | INTEGER | 难度 ID (1=Easy, ..., 6=ReMaster) |
 | `level` | TEXT | 等级字符串 (如 "13+") |
 | `designer` | TEXT | 谱师 |
-| `raw_content` | TEXT | 原始 Simai 文本 (用于展示) |
-| `note_data` | TEXT (JSON) | 节奏事件列表 (用于搜索) |
+| `raw_content` | BLOB (zlib compressed) | 原始 Simai 文本 (用于展示) |
+| `note_data` | BLOB (zlib compressed) | 节奏事件列表 (用于搜索) |
 
 ## 筛选接口 (`get_charts`)
 
