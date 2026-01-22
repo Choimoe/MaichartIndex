@@ -1,0 +1,78 @@
+site_name: MaichartIndex Documentation
+site_description: MaichartIndex
+site_author: Choimoe
+site_url: https://choimoe.github.io/MaichartIndex/
+repo_url: https://github.com/Choimoe/MaichartIndex
+repo_name: MaichartIndex
+edit_uri: 'https://github.com/Choimoe/MaichartIndex/edit/main/docs'
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+  font:
+    text: 'Fira Sans'
+    code: 'Fira Mono'
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - 首页: index.md
+  - 核心模块:
+    - 解析器 (Parser): parser.md
+    - 数据库 (Database): database.md
+    - 搜索逻辑 (Search): search.md
+  - 使用指南 (CLI): cli.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Choimoe/MaichartIndex
