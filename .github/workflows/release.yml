@@ -6,47 +6,87 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  build-tools:
     runs-on: windows-latest
-    
+    permissions:
+      contents: write
+      packages: write
+      
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10' 
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install fastapi uvicorn pyinstaller
-        # If requirements.txt exists, install it too (though we list key deps above just in case)
-        # pip install -r requirements.txt
         
-    - name: Build with PyInstaller
+    - name: Build Tools
       run: |
-        # Build main.py into a single executable 'maichart-index.exe'
-        # Include static directory to 'static'
-        pyinstaller --onefile --name maichart-index --add-data "static;static" main.py
+        # Build Client (CLI)
+        # Assuming main.py can run as client. Name it maichart-cli.exe
+        pyinstaller --onefile --name maichart-cli main.py
+        
+        # Build Web (Server)
+        # Name it maichart-web.exe, include static files
+        pyinstaller --onefile --name maichart-web --add-data "static;static" server.py
+        
+    - name: Organize Artifacts
+      shell: pwsh
+      run: |
+        $TAG = "${{ github.ref_name }}"
+        $ROOT = "MaichartIndex-Tools-$TAG"
+        
+        New-Item -ItemType Directory -Path "$ROOT\Client" -Force
+        New-Item -ItemType Directory -Path "$ROOT\Web" -Force
+        
+        Copy-Item "dist\maichart-cli.exe" -Destination "$ROOT\Client\"
+        Copy-Item "dist\maichart-web.exe" -Destination "$ROOT\Web\"
+        
+        # Compress
+        Compress-Archive -Path "$ROOT" -DestinationPath "$ROOT.zip"
         
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+        files: MaichartIndex-Tools-${{ github.ref_name }}.zip
+    
+  build-db:
+    runs-on: windows-latest
+    needs: build-tools # Optional: Run independent? Maybe safer to run parallel. Removed needs.
+    permissions:
+      contents: write
+      
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
         
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        
+    - name: Build Database
+      run: |
+        # data folder should be present from checkout
+        python main.py build
+        
+    - name: Compress Database
+      shell: pwsh
+      run: |
+        $TAG = "${{ github.ref_name }}"
+        $DB_ZIP = "MaichartIndex-Database-$TAG.zip"
+        Compress-Archive -Path "maichart.db" -DestinationPath $DB_ZIP
+        
+    - name: Upload Database to Release
+      uses: softprops/action-gh-release@v1
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/maichart-index.exe
-        asset_name: maichart-index.exe
-        asset_content_type: application/vnd.microsoft.portable-executable
+        files: MaichartIndex-Database-${{ github.ref_name }}.zip
