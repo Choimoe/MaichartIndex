@@ -7,7 +7,26 @@ on:
 
 jobs:
   build-tools:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            sep: ';'
+            exe_ext: '.exe'
+            suffix: 'Windows'
+            asset_ext: '.zip'
+          - os: ubuntu-latest
+            sep: ':'
+            exe_ext: ''
+            suffix: 'Linux'
+            asset_ext: '.tar.gz'
+          - os: macos-latest
+            sep: ':'
+            exe_ext: ''
+            suffix: 'macOS'
+            asset_ext: '.tar.gz'
+            
     permissions:
       contents: write
       packages: write
@@ -28,29 +47,42 @@ jobs:
     - name: Build Tools
       run: |
         # Build Client (CLI)
-        pyinstaller --onefile --name maichart-cli --add-data "static;static" main.py
+        pyinstaller --onefile --name maichart-cli --add-data "static${{ matrix.sep }}static" main.py
         
         # Build Web (Server)
-        pyinstaller --onefile --name maichart-webui --add-data "static;static" server.py
+        pyinstaller --onefile --name maichart-webui --add-data "static${{ matrix.sep }}static" server.py
         
     - name: Organize Artifacts
-      shell: pwsh
+      shell: bash
       run: |
-        $TAG = "${{ github.ref_name }}"
-        $ROOT = "MaichartIndex-Tools-$TAG"
+        TAG="${{ github.ref_name }}"
+        ROOT="MaichartIndex-Tools-${{ matrix.suffix }}-$TAG"
         
-        New-Item -ItemType Directory -Path "$ROOT" -Force
+        mkdir -p "$ROOT"
         
-        Copy-Item "dist\maichart-cli.exe" -Destination "$ROOT\"
-        Copy-Item "dist\maichart-webui.exe" -Destination "$ROOT\"
+        cp "dist/maichart-cli${{ matrix.exe_ext }}" "$ROOT/"
+        cp "dist/maichart-webui${{ matrix.exe_ext }}" "$ROOT/"
         
-        Compress-Archive -Path "$ROOT" -DestinationPath "$ROOT.zip"
+        if [ "${{ matrix.asset_ext }}" == ".zip" ]; then
+            # Windows (using PowerShell to zip if on windows, or zip cmd)
+            # Actually standard runners have 'zip' or we can use pwsh
+            # Let's simple check OS or just rely on '7z' or 'zip' generally avail?
+            # Safer to use python to zip/tar to be cross-platform or use specific shell commands
+            if [ "${{ runner.os }}" == "Windows" ]; then
+                7z a "${ROOT}.zip" "$ROOT"
+            else
+                zip -r "${ROOT}.zip" "$ROOT"
+            fi
+        else
+            # Linux/Mac
+            tar -czvf "${ROOT}.tar.gz" "$ROOT"
+        fi
         
-    - name: Create Release
-      id: create_release
+    - name: Upload Release Asset
       uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: MaichartIndex-Tools-${{ github.ref_name }}.zip
+        files: MaichartIndex-Tools-${{ matrix.suffix }}-${{ github.ref_name }}${{ matrix.asset_ext }}
     
   build-db:
     runs-on: windows-latest
