@@ -27,11 +27,13 @@ python main.py search "QUERY_STRING" [FILTERS]
 | `--level-min` | 否 | `float` | 最低等级。 | `--level-min 13.0` |
 | `--level-max` | 否 | `float` | 最高等级。 | `--level-max 14.5` |
 | `--designer` | 否 | `str` | 谱师名称 (模糊匹配)。 | `--designer "DX"` |
+| `--bpm-min` | 否 | `float` | 匹配段落的最低 BPM。 | `--bpm-min 180` |
+| `--bpm-max` | 否 | `float` | 匹配段落的最高 BPM。 | `--bpm-max 200` |
 
 ### 完整示例
 
-查找 Master 难度、等级 13 以上、包含特定 16 分交互节奏的谱面：
+查找 BPM 在 190~200 之间，且包含星星头（Slide）的 16 分音符段落：
 
 ```powershell
-python main.py search "{16}1,2,1,2,1,2,1,2," --diff Master --level-min 13.0
+python main.py search "{8}1*,1,1," --bpm-min 190 --bpm-max 200
 ```

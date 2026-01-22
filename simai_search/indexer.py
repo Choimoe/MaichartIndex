@@ -11,6 +11,7 @@ class Indexer:
 
     def run(self):
         print(f"Scanning {self.data_root}...")
+        print(f"Using DB: {self.db.db_path} (Absolute: {os.path.abspath(self.db.db_path)})")
         count = 0
         for root, dirs, files in os.walk(self.data_root):
             for file in files:
@@ -45,6 +46,7 @@ class Indexer:
         
         # Create song in DB
         song_id = self.db.add_song(title, artist, genre, full_path)
+        print(f"Added Song ID: {song_id} for {title}")
         
         # Insert Charts
         for difficulty, chart_text in charts.items():
@@ -56,7 +58,14 @@ class Indexer:
             designer = metadata.get(designer_key, '')
             
             # Parse rhythm
-            note_data = self.parser.parse_chart_to_rhythm(chart_text)
+            # Get wholebpm
+            wholebpm_str = metadata.get('wholebpm', '0')
+            try:
+                wholebpm = float(wholebpm_str)
+            except:
+                wholebpm = 0.0
+                
+            note_data = self.parser.parse_chart_to_rhythm(chart_text, initial_bpm=wholebpm)
             
             self.db.add_chart(song_id, difficulty, level, designer, chart_text, note_data)
 

@@ -1,5 +1,6 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Optional
 import json
+import re
 from .db import SimaiDB
 from .parser import SimaiParser
 
@@ -14,9 +15,12 @@ class RhythmSearcher:
                level_min: float = None,
                level_max: float = None,
                difficulties: List[int] = None,
-               designer: str = None) -> List[Tuple[str, str, str, str]]:
+               designer: str = None,
+               bpm_min: float = None,
+               bpm_max: float = None) -> List[Tuple[str, str, str, str, str]]:
         """
         Searches for a rhythm pattern with optional filters.
+        Returns: (SongTitle, Difficulty, Level, ID, Snippet)
         """
         # Parse query to rhythm events
         query_events = self.parser.parse_chart_to_rhythm(query_simai)
@@ -25,8 +29,12 @@ class RhythmSearcher:
             return []
             
         # Normalize query: relative to first note
-        start_time = query_events[0]
-        query_deltas = [t - start_time for t in query_events]
+        # query_events is now List[Dict]
+        start_time = query_events[0]['time']
+        
+        # We store relative time in the query dicts for easier matching
+        for q in query_events:
+            q['delta'] = q['time'] - start_time
         
         results = []
         
@@ -42,83 +50,107 @@ class RhythmSearcher:
             try:
                 chart_events = json.loads(note_data_json)
                 
-                if self._match_pattern(chart_events, query_deltas, tolerance):
+                # chart_events is list of dicts: {'time', 'bpm', 'is_star', 'src_start', 'src_end'}
+                
+                match_indices = self._match_pattern(chart_events, query_events, tolerance, bpm_min, bpm_max)
+                if match_indices:
+                     # Reconstruct snippet
+                     # match_indices is (start_event_idx, end_event_idx)
+                     # Snip from chart_events[start].start to chart_events[end].end
+                     start_evt = chart_events[match_indices[0]]
+                     end_evt = chart_events[match_indices[1]]
+                     
+                     # We need the "cleaned" text to use these indices?
+                     # The indices in `parser.py` are based on the *cleaned* text.
+                     # `raw_content` in DB is the *original* text (with comments/newlines).
+                     # IMPORTANT: We need to re-clean the raw_content to match the indices.
+                     # Or `parser.py` logic implies we need the cleaned text.
+                     
+                     # Re-clean raw content
+                     lines = [re.sub(r'//.*', '', line) for line in raw_content.splitlines()]
+                     cleaned_text = ''.join(lines).replace(' ', '').replace('\t', '')
+                     
+                     snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]
+                     
                      # Map difficulty number to name
                      diff_names = {1: "Easy", 2: "Basic", 3: "Advanced", 4: "Expert", 5: "Master", 6: "ReMaster"}
                      diff_name = diff_names.get(difficulty, str(difficulty))
-                     results.append((song_title, diff_name, level, chart_id))
+                     results.append((song_title, diff_name, level, chart_id, snippet))
             except Exception as e:
                 # print(f"Error searching chart {chart_id}: {e}")
                 continue
                 
         return results
 
-    def _match_pattern(self, chart_events: List[float], query_deltas: List[float], tolerance: float) -> bool:
+    def _match_pattern(self, chart_events: List[dict], query_events: List[dict], tolerance: float, bpm_min: float = None, bpm_max: float = None) -> Tuple[int, int]:
         """
-        Checks if query_deltas sequence exists in chart_events.
+        Checks if query sequence exists in chart_events.
+        Returns (start_idx, end_idx) of the match in chart_events, or None.
         """
-        if len(query_deltas) > len(chart_events):
-            return False
+        n_query = len(query_events)
+        n_chart = len(chart_events)
+        
+        if n_query > n_chart:
+            return None
             
-        # Brute force sliding window
-        # Optimized: Only check starting positions where chart_events[i] is a valid start
-        # Since query_deltas[0] is 0, we treat every note in chart as a candidate start.
-        
-        # We can be smarter: 
-        # For each note C in chart:
-        #   Check if C + query_deltas[1] exists in chart (within tolerance)
-        #   Check if C + query_deltas[2] exists...
-        # This is O(N*M) where N is chart events, M is query length.
-        # Since chart events are sorted, we can use binary search or two pointers.
-        # Given M is small (pattern usually short), binary search is good.
-        
-        # Let's use bisect for existence check
-        import bisect
-        
-        n_events = len(chart_events)
-        
-        for i in range(n_events):
+        for i in range(n_chart):
             # Optimization: If remaining events are fewer than query, stop
-            if n_events - i < len(query_deltas):
+            if n_chart - i < n_query:
                 break
                 
-            start_t = chart_events[i]
+            start_event = chart_events[i]
+            base_time = start_event['time']
+            
+            # Check Start Event Constraints
+            if bpm_min is not None and start_event['bpm'] < bpm_min:
+                continue
+            if bpm_max is not None and start_event['bpm'] > bpm_max:
+                continue
+            if query_events[0]['is_star'] and not start_event['is_star']:
+                continue
+                
             match = True
             
-            # Check subsequence
-            for k in range(1, len(query_deltas)):
-                target_t = start_t + query_deltas[k]
+            current_chart_idx = i
+            last_match_idx = i
+            
+            for k in range(1, n_query):
+                q_evt = query_events[k]
+                target_time = base_time + q_evt['delta']
                 
-                # Check if target_t exists in chart_events (within tolerance)
-                # Bisect left to find insertion point
-                idx = bisect.bisect_left(chart_events, target_t - tolerance, lo=i)
+                found_k = False
                 
-                # Check if we found a candidate
-                if idx < n_events and abs(chart_events[idx] - target_t) <= tolerance:
-                    # Found match for this note
-                    pass
-                else:
-                    # Try next element just in case of slight overlap? 
-                    # bisect_left gives first element >= target - tol.
-                    # so chart_events[idx] >= target - tol.
-                    # We checked condition: chart_events[idx] - target <= tol (implicit if we check abs)
-                    # Wait, abs(val - target) <= tol <=> -tol <= val - target <= tol
-                    # <=> target - tol <= val <= target + tol.
-                    # bisect_left finds first val >= target - tol.
-                    # We just need to check if that val is also <= target + tol.
-                    if idx < n_events and chart_events[idx] <= target_t + tolerance:
-                        pass
-                        # Note: we don't strictly require sequential indices in chart, just existence.
-                        # The query {16}1,1 means "Two notes separated by 1/16". 
-                        # If the chart has "Note, Note, Note" at 0, 0.25, 0.5.
-                        # Query matches at 0 (0, 0.25 matched).
-                        # Matches at 0.25 (0.25, 0.5 matched).
-                        # Correct.
-                    else:
-                        match = False
+                while current_chart_idx < n_chart:
+                    c_evt = chart_events[current_chart_idx]
+                    t_diff = c_evt['time'] - target_time
+                    
+                    if t_diff < -tolerance:
+                        current_chart_idx += 1
+                        continue
+                    elif t_diff > tolerance:
                         break
+                    else:
+                        valid_note = True
+                        if bpm_min is not None and c_evt['bpm'] < bpm_min:
+                            valid_note = False
+                        if bpm_max is not None and c_evt['bpm'] > bpm_max:
+                            valid_note = False
+                        if q_evt['is_star'] and not c_evt['is_star']:
+                            valid_note = False
+                            
+                        if valid_note:
+                            found_k = True
+                            last_match_idx = current_chart_idx
+                            current_chart_idx += 1 
+                            break 
+                        
+                        current_chart_idx += 1
+                
+                if not found_k:
+                    match = False
+                    break
             
             if match:
-                return True
+                return (i, last_match_idx)
                 
-        return False
+        return None

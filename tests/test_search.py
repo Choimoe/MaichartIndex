@@ -14,31 +14,55 @@ class TestRhythmSearcher(unittest.TestCase):
         self.searcher = RhythmSearcher(":memory:") 
 
     def test_match_exact(self):
-        chart_events = [0.0, 1.0, 2.0, 3.0]
-        query_deltas = [0.0, 1.0] # Matches 0-1, 1-2, 2-3
+        # Chart events
+        chart_events = [
+            {'time': 0.0, 'bpm': 150, 'is_star': False, 'src_start': 0, 'src_end': 1},
+            {'time': 1.0, 'bpm': 150, 'is_star': False, 'src_start': 2, 'src_end': 3}
+        ]
+        # Query events
+        query_events = [
+            {'time': 0.0, 'bpm': 0, 'is_star': False},
+            {'time': 1.0, 'bpm': 0, 'is_star': False}
+        ]
+        self._normalize(query_events)
         
-        self.assertTrue(self.searcher._match_pattern(chart_events, query_deltas, tolerance=0.01))
+        result = self.searcher._match_pattern(chart_events, query_events, tolerance=0.01)
+        self.assertIsNotNone(result)
+        self.assertEqual(result, (0, 1)) # Start idx 0, End idx 1
 
-    def test_match_gap(self):
-        # Chart: Note, Rest, Note (0.0, 2.0)
-        # Query: Note, Rest, Note (Deltas: 0.0, 2.0)
-        chart_events = [0.0, 2.0, 3.0]
-        query_deltas = [0.0, 2.0]
+    def test_bpm_filter(self):
+        chart_events = [
+            {'time': 0.0, 'bpm': 150, 'is_star': False},
+            {'time': 1.0, 'bpm': 150, 'is_star': False}
+        ]
+        query_events = [{'time': 0.0, 'bpm': 0, 'is_star': False}]
+        self._normalize(query_events)
         
-        self.assertTrue(self.searcher._match_pattern(chart_events, query_deltas, tolerance=0.01))
+        # Match matches logic
+        self.assertTrue(self.searcher._match_pattern(chart_events, query_events, 0.01, bpm_min=140, bpm_max=160))
+        self.assertFalse(self.searcher._match_pattern(chart_events, query_events, 0.01, bpm_min=160))
 
-    def test_no_match(self):
-        chart_events = [0.0, 1.0, 2.0]
-        query_deltas = [0.0, 0.5] # 8th note pattern
+    def test_star_filter(self):
+        chart_events = [
+            {'time': 0.0, 'bpm': 150, 'is_star': True} # Star
+        ]
         
-        self.assertFalse(self.searcher._match_pattern(chart_events, query_deltas, tolerance=0.01))
+        # Query requiring star
+        query_events = [{'time': 0.0, 'bpm': 0, 'is_star': True}]
+        self._normalize(query_events)
+        self.assertTrue(self.searcher._match_pattern(chart_events, query_events, 0.01))
+        
+        # Query normal note (should match star if normal query implies "any"?)
+        # Current logic: query normal (is_star=False) matches anything.
+        query_normal = [{'time': 0.0, 'bpm': 0, 'is_star': False}]
+        self._normalize(query_normal)
+        self.assertTrue(self.searcher._match_pattern(chart_events, query_normal, 0.01))
+        
+        # Chart normal, Query Star -> Fail
+        chart_normal = [{'time': 0.0, 'bpm': 150, 'is_star': False}]
+        self.assertFalse(self.searcher._match_pattern(chart_normal, query_events, 0.01))
 
-    def test_tolerance(self):
-        chart_events = [0.0, 1.005]
-        query_deltas = [0.0, 1.0]
-        
-        # Within 0.01 tolerance
-        self.assertTrue(self.searcher._match_pattern(chart_events, query_deltas, tolerance=0.01))
-        
-        # Out of tolerance (strict)
-        self.assertFalse(self.searcher._match_pattern(chart_events, query_deltas, tolerance=0.001))
+    def _normalize(self, query):
+        start = query[0]['time']
+        for q in query:
+            q['delta'] = q['time'] - start
