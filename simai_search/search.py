@@ -11,32 +11,26 @@ class RhythmSearcher:
         self.chart_cache = None
 
     def _ensure_cache(self):
-        """Lazy load all charts into memory and pre-parse JSON."""
+        """Lazy load charts into memory (Metadata + Events only, NO raw content)."""
         if self.chart_cache is not None:
             return
 
         print("Loading charts into memory...")
-        # Fetch ALL charts from DB
-        raw_rows = self.db.get_charts()
+        # Fetch light-weight data from DB
+        raw_rows = self.db.get_search_cache_data()
         
         cache = []
-        for chart_id, song_title, difficulty, level, note_data_json, raw_content, designer in raw_rows:
+        for chart_id, song_title, difficulty, level, note_data_json, designer in raw_rows:
             try:
                 # Pre-parse event data
                 events = json.loads(note_data_json)
                 
                 # Pre-calculate numeric level for faster filtering
-                # Simai levels: "13", "13+", "12.5"
-                # If it's "13+", treated as 13.7 (approx) or just let's try to parse
                 numeric_level = 0.0
                 try:
                     if '+' in level:
                         base = float(level.replace('+', ''))
-                        numeric_level = base + 0.5 # Standard mapping usually + is .7 but let's say .5 for sorting/range? 
-                        # Actually standard convention: 13+ is 13.7-13.9. 
-                        # But user inputs 13.5. 
-                        # Let's just use simple parsing:
-                        numeric_level = base + 0.6 # slightly more than .5
+                        numeric_level = base + 0.6 
                     else:
                         numeric_level = float(level)
                 except ValueError:
@@ -49,7 +43,7 @@ class RhythmSearcher:
                     'level_str': level,
                     'level_num': numeric_level,
                     'events': events,
-                    'raw_content': raw_content,
+                    # 'raw_content': raw_content, # EXCLUDED to save RAM
                     'designer': designer or ""
                 })
             except Exception as e:
@@ -105,11 +99,19 @@ class RhythmSearcher:
                 if match_result:
                      match_indices, degree = match_result
                      
+                     # Check if it beats existing results or just append? 
+                     # We need to fetch raw content NOW to slice snippet
+                     
+                     # Fetch raw content on-demand
+                     raw_content = self.db.get_chart_raw_data(chart['id'])
+                     if raw_content is None:
+                         continue
+
                      start_evt = chart['events'][match_indices[0]]
                      end_evt = chart['events'][match_indices[1]]
                      
                      # Re-clean raw content to extract snippet
-                     lines = [re.sub(r'//.*', '', line) for line in chart['raw_content'].splitlines()]
+                     lines = [re.sub(r'//.*', '', line) for line in raw_content.splitlines()]
                      cleaned_text = ''.join(lines).replace(' ', '').replace('\t', '')
                      
                      raw_snippet = cleaned_text[start_evt.get('src_start', 0) : end_evt.get('src_end', 0)]

@@ -142,3 +142,46 @@ class SimaiDB:
             decoded_rows.append((c_id, title, diff, level, note_json, raw_content, desg))
             
         return decoded_rows
+
+    def get_search_cache_data(self) -> List[Tuple[int, str, int, str, str, str]]:
+        """
+        Fetch lightweight data for in-memory caching (excludes raw_content).
+        Returns: [(id, title, difficulty, level, note_data_json, designer)]
+        """
+        cursor = self.conn.cursor()
+        query = '''
+            SELECT c.id, s.title, c.difficulty, c.level, c.note_data, c.designer
+            FROM charts c
+            JOIN songs s ON c.song_id = s.id
+        '''
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        decoded_rows = []
+        for row in rows:
+            c_id, title, diff, level, note_blob, desg = row
+            try:
+                if isinstance(note_blob, bytes):
+                    note_json = zlib.decompress(note_blob).decode('utf-8')
+                else:
+                    note_json = note_blob
+            except Exception as e:
+                continue
+            decoded_rows.append((c_id, title, diff, level, note_json, desg))
+        return decoded_rows
+
+    def get_chart_raw_data(self, chart_id: int) -> Optional[str]:
+        """Fetch raw content for a specific chart on demand."""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT raw_content FROM charts WHERE id = ?', (chart_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        raw_blob = row[0]
+        try:
+            if isinstance(raw_blob, bytes):
+                return zlib.decompress(raw_blob).decode('utf-8')
+            return raw_blob
+        except:
+            return None
