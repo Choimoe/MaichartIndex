@@ -48,6 +48,15 @@ def cmd_search(args):
         print(f"[{diff} {level}] {title} (Match: {degree:.0%})")
         print(f"    Match: {snippet}")
 
+        print(f"    Match: {snippet}")
+
+def cmd_serve(args):
+    import uvicorn
+    import server
+    print(f"Starting server at http://{args.host}:{args.port}")
+    # We pass the app object directly
+    uvicorn.run(server.app, host=args.host, port=args.port)
+
 def main():
     parser = argparse.ArgumentParser(description="Simai Chart Search")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -63,12 +72,18 @@ def main():
     parser_search.add_argument("--bpm-min", type=float, help="Minimum BPM for the pattern")
     parser_search.add_argument("--bpm-max", type=float, help="Maximum BPM for the pattern")
     
+    parser_serve = subparsers.add_parser("serve", help="Run the web server")
+    parser_serve.add_argument("--port", type=int, default=8000, help="Port to run server on")
+    parser_serve.add_argument("--host", type=str, default="0.0.0.0", help="Host interface")
+    
     args = parser.parse_args()
     
     if args.command == "build":
         cmd_build(args)
     elif args.command == "search":
         cmd_search(args)
+    elif args.command == "serve":
+        cmd_serve(args)
 
 if __name__ == "__main__":
     main()

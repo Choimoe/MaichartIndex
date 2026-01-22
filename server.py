@@ -10,6 +10,18 @@ import json
 
 from simai_search.search import RhythmSearcher
 
+import sys
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 # Searcher
 DB_PATH = "maichart.db"  # Hardcoded as in main.py
 searcher = None
@@ -88,7 +100,7 @@ def search(
     return {"count": len(results), "results": json_results}
 
 # Mount static files
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory=resource_path("static"), html=True), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
