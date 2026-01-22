@@ -10,6 +10,8 @@ MaichartIndex 是一个用于解析、索引和检索 Simai 格式谱面的工�
 *   **多维筛选**: 支持按难度等级（Level）、难度类型（Difficulty）、谱师（Designer）过滤搜索结果。
 *   **SQL存储**: 使用 SQLite 存储索引数据，轻量且易于迁移。
 
+具体内容可以参考 [项目文档](https://choimoe.github.io/MaichartIndex/)。
+
 ## 快速开始 (使用 Release 版本)
 
 推荐普通用户直接下载编译好的可执行文件，无需安装 Python 环境。
@@ -38,10 +40,3 @@ MaichartIndex 是一个用于解析、索引和检索 Simai 格式谱面的工�
 ## 开发者与高阶使用
 
 如果您希望从源代码构建，或在 Linux/macOS 环境下运行，请参阅文档中的 [从代码构建](https://choimoe.github.io/MaichartIndex/build/) 章节。
-
-## 文档及模块
-详细文档请参考 [Wiki/Docs](https://choimoe.github.io/MaichartIndex/) (构建后生成)。
-
-*   **解析器 (Parser)**: 处理文本解析与节奏提取。
-*   **数据库 (Database)**: 负责数据持久化与筛选查询。
-*   **搜索核心 (Search)**: 实现模糊匹配算法。

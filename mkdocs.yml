@@ -65,14 +65,15 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - 首页: index.md
+  - 首页:
+    - 项目总览: index.md
+    - 使用指南 (CLI): cli.md
+    - Web 工具 (Web Tool): web_tool.md
+    - 从代码构建 (Build): build.md
   - 核心模块:
     - 解析器 (Parser): parser.md
     - 数据库 (Database): database.md
     - 搜索逻辑 (Search): search.md
-  - 使用指南 (CLI): cli.md
-  - Web 工具 (Web Tool): web_tool.md
-  - 从代码构建 (Build): build.md
 
 extra:
   social:
