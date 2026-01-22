@@ -2,6 +2,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 import json
+import zlib
 
 @dataclass
 class Song:
@@ -45,8 +46,8 @@ class SimaiDB:
                 difficulty INTEGER,
                 level TEXT,
                 designer TEXT,
-                raw_content TEXT,
-                note_data TEXT,
+                raw_content BLOB,
+                note_data BLOB,
                 FOREIGN KEY(song_id) REFERENCES songs(id)
             )
         ''')
@@ -71,10 +72,14 @@ class SimaiDB:
         # For now, let's assume valid re-indexing clears old entries or we check
         cursor.execute('DELETE FROM charts WHERE song_id = ? AND difficulty = ?', (song_id, difficulty))
         
+        # Compress large text fields
+        raw_content_blob = zlib.compress(raw_content.encode('utf-8'))
+        note_data_blob = zlib.compress(json.dumps(note_data).encode('utf-8'))
+        
         cursor.execute('''
             INSERT INTO charts (song_id, difficulty, level, designer, raw_content, note_data)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (song_id, difficulty, level, designer, raw_content, json.dumps(note_data)))
+        ''', (song_id, difficulty, level, designer, raw_content_blob, note_data_blob))
         self.conn.commit()
 
     def get_charts(self, 
@@ -93,19 +98,6 @@ class SimaiDB:
         params = []
         
         if level_min is not None:
-            # Simai levels are strings like "12.5", "13+", etc.
-            # We need to handle this. For now, let's rely on the fact that standard numerical levels convert to float.
-            # But "13+" is usually treated as 13.7 or so in internal logic?
-            # Or we simply try to cast `level` column to float in SQL?
-            # SQLite `CAST(level AS REAL)` might work for "12.5" but "13+" becomes 13.0.
-            # Ideally we parsed levels to float during indexing.
-            # Let's assume for now we only filter on the numeric part or the user stores them as numbers.
-            # Actually, let's fix the schema/indexer later to store a numeric_level column for better filtering.
-            # For this step, I will add a `numeric_level` column to `charts` table in `create_tables` but since table exists,
-            # I can't easily migrate without dropping.
-            # I'll stick to basic CAST which works for pure numbers. "13+" charts might be missed or treated as 13.0.
-            # Better approach: filter in python? No, efficiency.
-            # Let's use CAST for now.
             query += ' AND CAST(c.level AS REAL) >= ?'
             params.append(level_min)
             
@@ -123,4 +115,30 @@ class SimaiDB:
             params.append(f'%{designer}%')
             
         cursor.execute(query, params)
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        
+        decoded_rows = []
+        for row in rows:
+            # Row: id, title, diff, level, note_data(blob), raw_content(blob), designer
+            c_id, title, diff, level, note_blob, raw_blob, desg = row
+            
+            # Decompress
+            try:
+                # If it's already bytes, assume compressed. If string, legacy db? 
+                # We enforce rebuild, so always bytes.
+                if isinstance(note_blob, bytes):
+                    note_json = zlib.decompress(note_blob).decode('utf-8')
+                else:
+                    note_json = note_blob # Fallback if someone didn't rebuild
+                
+                if isinstance(raw_blob, bytes):
+                    raw_content = zlib.decompress(raw_blob).decode('utf-8')
+                else:
+                    raw_content = raw_blob
+            except Exception as e:
+                print(f"Error decompressing chart {c_id}: {e}")
+                continue
+                
+            decoded_rows.append((c_id, title, diff, level, note_json, raw_content, desg))
+            
+        return decoded_rows
