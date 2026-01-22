@@ -21,7 +21,14 @@ MaichartIndex 是一个用于解析、索引和检索 Simai 格式谱面的工�
 python main.py build
 ```
 
-### 3. 搜索谱面
+### 3. 使用 Web 界面 (推荐)
+启动可视化搜索服务：
+```powershell
+python main.py serve
+```
+访问 `http://localhost:8000` 即可通过图形界面进行搜索和筛选。
+
+### 4. 命令行搜索 (CLI)
 搜索一个 16 分音符的五连打节奏，筛选 Master 难度且等级大于 13.0 的谱面：
 ```powershell
 python main.py search "{16}1,1,1,1,1,,1,1,1,,1,1,1," --diff Master --level-min 13.0
